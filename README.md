@@ -1,6 +1,6 @@
-# Polymarket 5-Minute Snipe Trading Bot
+# Polymarket 5Min Arbitrage Trading Bot
 
-A **professional-grade 5-minute sniping bot** : Designed for high-frequency trading strategies on short-duration prediction markets, leveraging precise timing and configurable entry rules.
+A **professional-grade 5-minute arbitrage bot** : Designed for high-frequency trading strategies on short-duration prediction markets, leveraging precise timing and configurable entry rules.
 
 ---
 
@@ -30,8 +30,8 @@ A **professional-grade 5-minute sniping bot** : Designed for high-frequency trad
 ## Installation
 
 ```bash
-git clone <repo_url>
-cd polymarket-snipe-bot
+git clone https://github.com/Gustavo1900/polymarket-arbitrage-bot
+cd polymarket-arbitrage-bot
 npm install
 ```
 

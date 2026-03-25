@@ -20,17 +20,11 @@ export function validateConfig(config: MarketConfig): boolean {
   return true;
 }
 
-/**
- * Generate market slug for the given configuration
- */
 export function getMarketSlug(config: MarketConfig): string {
   const { slug } = generateMarketSlug(config.coin, config.minutes);
   return slug;
 }
 
-/**
- * Get market query for API search (fallback method)
- */
 export function getMarketQuery(config: MarketConfig): string {
   const coinSymbol = config.coin.toUpperCase();
   return coinSymbol;
