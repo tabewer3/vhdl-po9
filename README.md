@@ -110,3 +110,6 @@ Bot Workflow:
 ## License
 
 MIT License
+
+## Contact
+For the best version contact here: [Telegram](https://t.me/snipmaxi)
