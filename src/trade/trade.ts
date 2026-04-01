@@ -1,5 +1,4 @@
 import { ClobClient, OrderType, Side } from "@polymarket/clob-client";
-import { Big } from "cjs-biginteger";
 import { trade } from "..";
 import { purchased_token_global, set_purchased_token } from "../services/ws_rtds";
 import { tui } from "../tui";
@@ -56,14 +55,12 @@ export class Trade {
 
                 set_purchased_token(true);
 
-                const priceBig = new Big(price);
-                const sizeBig = new Big(shareCount);
 
                 const order = await this.authorizedClob.createOrder({
                     tokenID: this.upTokenId,
-                    price: priceBig.toNumber(),
+                    price: price,
                     side: Side.BUY,
-                    size: sizeBig.toNumber(),
+                    size: shareCount,
                 });
 
                 console.log(tui.success("Order created: " + JSON.stringify(order)));
@@ -85,14 +82,11 @@ export class Trade {
 
                 set_purchased_token(true);
 
-                const priceBig = new Big(price);
-                const sizeBig = new Big(shareCount);
-
                 const order = await this.authorizedClob.createOrder({
                     tokenID: this.downTokenId,
-                    price: priceBig.toNumber(),
+                    price: price,
                     side: Side.BUY,
-                    size: sizeBig.toNumber(),
+                    size: shareCount,
                 });
 
                 console.log(tui.success("Order created: " + JSON.stringify(order)));
