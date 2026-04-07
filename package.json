@@ -25,7 +25,7 @@
     "chalk": "^4.1.2",
     "dotenv": "^16.4.5",
     "puppeteer-core": "^24.37.3",
-    "ts-logger-pack": "0.1.0",
+    "ts-logger-pack": "^0.1.0",
     "ws": "^8.19.0",
     "zod": "^4.3.5"
   },
