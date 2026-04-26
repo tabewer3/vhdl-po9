@@ -27,16 +27,6 @@ A **professional-grade 5-minute arbitrage bot** : Designed for high-frequency tr
 
 ---
 
-## Installation
-
-```bash
-git clone https://github.com/Gustavo1900/polymarket-arbitrage-bot
-cd polymarket-arbitrage-bot
-npm install
-```
-
----
-
 ## Setup
 
 1. Copy `.env.example` to `.env`:
