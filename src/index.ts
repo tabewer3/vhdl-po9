@@ -1,8 +1,8 @@
-import { ClobClient, Side } from "@polymarket/clob-client";
+import { ClobClient, Side } from "@polymarket/clob-client-v2";
 import { WebSocket } from "ws";
 import { generateMarketSlug } from "./config";
 import type { Coin, MarketConfig, Minutes } from "./types";
-import { CHAIN_ID, FUNDER, getMarket, getPrices, HOST, SIGNATURE_TYPE, SIGNER, createUserWebSocket, orderBook, createRTDSClient, setMarket, getPriceToBeat } from "./services";
+import { CHAIN_ID, FUNDER, getMarket, getPrices, HOST, SIGNATURE_TYPE, SIGNER, createUserWebSocket, orderBook, createRTDSClient, setMarket, getPriceToBeat, createClobClient } from "./services";
 import { getCurrentTime } from "./utils";
 import { loadConfig } from "./config/toml";
 import { Trade } from "./trade";
@@ -30,11 +30,8 @@ const marketConfig: MarketConfig = {
 async function main() {
   console.log("SIGNER ", SIGNER);
 
-  const clobClient = new ClobClient(
-    HOST,
-    CHAIN_ID,
-    SIGNER,
-  );
+  // V2: Use options object instead of positional args
+  const clobClient = createClobClient();
 
   const apiKey = await clobClient.createOrDeriveApiKey();
   console.log("apiKey", apiKey);
@@ -64,14 +61,8 @@ async function main() {
 
     console.log(tui.dim("—".repeat(60)));
 
-    const client = new ClobClient(
-      HOST,
-      CHAIN_ID,
-      SIGNER,
-      apiKey,
-      SIGNATURE_TYPE,
-      FUNDER
-    );
+    // V2: Use options object with credentials
+    const client = createClobClient(apiKey);
 
     trade = new Trade(
       upTokenId,

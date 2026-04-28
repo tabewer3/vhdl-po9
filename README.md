@@ -2,6 +2,8 @@
 
 A **professional-grade 5-minute arbitrage bot** : Designed for high-frequency trading strategies on short-duration prediction markets, leveraging precise timing and configurable entry rules.
 
+> **CLOB V2 Ready** - Updated for Polymarket's April 28, 2026 infrastructure upgrade (CLOB V2, pUSD collateral)
+
 ---
 
 ## Features
@@ -22,8 +24,22 @@ A **professional-grade 5-minute arbitrage bot** : Designed for high-frequency tr
 
 * Node.js >= 20
 * NPM >= 9
-* Polygon wallet with USDC funding
+* Polygon wallet with **pUSD** funding (CLOB V2 uses pUSD instead of USDC.e)
 * Polymarket account with access to the CLOB API
+
+### CLOB V2 Changes (April 2026)
+
+This bot has been updated for Polymarket's CLOB V2 infrastructure:
+
+| Component | V1 (Legacy) | V2 (Current) |
+|-----------|-------------|--------------|
+| SDK | `@polymarket/clob-client` | `@polymarket/clob-client-v2` |
+| Collateral | USDC.e | pUSD (Polymarket USD) |
+| Constructor | Positional args | Options object |
+| Fees | Embedded in order | Protocol-set at match time |
+| EIP-712 Version | "1" | "2" |
+
+If you have USDC.e, wrap it to pUSD via the Collateral Onramp contract's `wrap()` function.
 
 ---
 
@@ -81,10 +97,11 @@ Bot Workflow:
 
 ## Notes
 
-* ⚠️ Polymarket requires **EIP‑712 signed orders** for secure execution
-* ⚠️ Ensure your proxy wallet has sufficient **USDC** balance
+* ⚠️ Polymarket requires **EIP‑712 signed orders** (V2 uses domain version "2")
+* ⚠️ Ensure your proxy wallet has sufficient **pUSD** balance (not USDC.e)
 * ⚠️ Polling is used; consider WebSocket integration for ultra-low latency
 * ⚠️ High-risk strategy: test extensively before real capital deployment
+* ⚠️ Optional: Set `POLY_BUILDER_CODE` for attribution and revenue sharing
 
 ---
 

@@ -1,4 +1,4 @@
-import { ClobClient, OrderType, Side } from "@polymarket/clob-client";
+import { ClobClient, OrderType, Side } from "@polymarket/clob-client-v2";
 import { trade } from "..";
 import { purchased_token_global, set_purchased_token } from "../services/ws_rtds";
 import { tui } from "../tui";

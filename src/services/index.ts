@@ -11,3 +11,4 @@ export {
     createRTDSClient,
     RTDS_CLIENT,
 } from "./ws_rtds";
+export { createClobClient } from "./clob";

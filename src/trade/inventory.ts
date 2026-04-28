@@ -1,4 +1,4 @@
-import { ApiKeyCreds, ClobClient } from "@polymarket/clob-client";
+import { ApiKeyCreds, ClobClient } from "@polymarket/clob-client-v2";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { Wallet, ethers } from "ethers";
 import { POLYMARKET_PRIVATE_KEY, PROXY_WALLET_ADDRESS, RPC_URL } from "../config";
