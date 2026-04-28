@@ -11,147 +11,137 @@ import { Volatility } from "./analysis";
 import { redeem } from "./trade/inventory";
 import { tui } from "./tui";
 
+// Bootstrap configuration
 loadConfig();
 
-export let trade: Trade;
-export let startTimestampGlobal: number;
-export let endTimestampGlobal: number;
-export let marketPeriod: number;
+// Execution state
+export let executor: Trade;
+export let cycleStartTs: number;
+export let cycleEndTs: number;
+export let cycleDuration: number;
 
-export const volatility = new Volatility();
+// Volatility tracker instance
+export const volTracker = new Volatility();
 
-
-
-const marketConfig: MarketConfig = {
-  coin: globalThis.__CONFIG__.market.market_coin as Coin, // btc / eth / sol / xrp
-  minutes: parseInt(globalThis.__CONFIG__.market.market_period) as Minutes, // 15 / 60 / 240 / 1440
+// Market parameters from config
+const execConfig: MarketConfig = {
+  coin: globalThis.__CONFIG__.market.market_coin as Coin,
+  minutes: parseInt(globalThis.__CONFIG__.market.market_period) as Minutes,
 };
 
-async function main() {
-  console.log("SIGNER ", SIGNER);
+async function bootstrap() {
+  console.log("[INIT] Wallet:", SIGNER.address);
 
-  // V2: Use options object instead of positional args
-  const clobClient = createClobClient();
+  // Initialize CLOB connection
+  const baseClient = createClobClient();
+  const credentials = await baseClient.createOrDeriveApiKey();
+  console.log("[INIT] API credentials obtained");
 
-  const apiKey = await clobClient.createOrDeriveApiKey();
-  console.log("apiKey", apiKey);
-
+  // Main execution loop
   while (true) {
+    const marketInfo = generateMarketSlug(execConfig.coin, execConfig.minutes);
+    const { slug: marketSlug, startTimestamp, endTimestamp } = marketInfo;
 
-    const { slug, startTimestamp, endTimestamp } = generateMarketSlug(
-      marketConfig.coin,
-      marketConfig.minutes
-    );
+    // Update cycle timing
+    cycleStartTs = startTimestamp;
+    cycleEndTs = endTimestamp;
+    cycleDuration = endTimestamp - startTimestamp;
 
-    startTimestampGlobal = startTimestamp;
-    endTimestampGlobal = endTimestamp;
-    marketPeriod = endTimestamp - startTimestamp;
-
-    console.log(tui.section("Market", [
-      `🔍 Slug: ${tui.highlight(slug)}`,
-      tui.dim(`Ends: ${getCurrentTime()} / ${endTimestamp}`),
+    console.log(tui.section("Cycle", [
+      `Target: ${tui.highlight(marketSlug)}`,
+      tui.dim(`Window: ${getCurrentTime()} -> ${endTimestamp}`),
     ]));
 
-    const market = await getMarket(slug);
+    const marketData = await getMarket(marketSlug);
+    setMarket(marketData);
 
-    setMarket(market);
+    // Extract token identifiers
+    const tokenIds = JSON.parse(marketData.clobTokenIds);
+    const bullTokenId = tokenIds[0];
+    const bearTokenId = tokenIds[1];
 
-    const upTokenId = JSON.parse(market.clobTokenIds)[0];
-    const downTokenId = JSON.parse(market.clobTokenIds)[1];
+    console.log(tui.dim("━".repeat(60)));
 
-    console.log(tui.dim("—".repeat(60)));
+    // Create authenticated client for this cycle
+    const authClient = createClobClient(credentials);
 
-    // V2: Use options object with credentials
-    const client = createClobClient(apiKey);
-
-    trade = new Trade(
-      upTokenId,
-      downTokenId,
-      client
-    );
-
+    executor = new Trade(bullTokenId, bearTokenId, authClient);
     set_purchased_token(false);
 
-    const USER_WS = createUserWebSocket();
-
-    let RTDS_WS: ReturnType<typeof createRTDSClient>;
+    // Establish WebSocket connections
+    const orderbookWs = createUserWebSocket();
+    let priceWs: ReturnType<typeof createRTDSClient>;
 
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("WebSocket connection timeout"));
+      const connTimeout = setTimeout(() => {
+        reject(new Error("Connection timeout exceeded"));
       }, 10000);
 
-      let userWsConnected = false;
-      let rtdsWsConnected = false;
+      let obConnected = false;
+      let priceConnected = false;
 
-      const checkBothConnected = () => {
-        if (userWsConnected && rtdsWsConnected) {
-          clearTimeout(timeout);
+      const verifyConnections = () => {
+        if (obConnected && priceConnected) {
+          clearTimeout(connTimeout);
           resolve();
         }
       };
 
-      USER_WS.onopen = () => {
-        userWsConnected = true;
-        checkBothConnected();
+      orderbookWs.onopen = () => {
+        obConnected = true;
+        verifyConnections();
       };
 
-      USER_WS.onerror = (error) => {
-        clearTimeout(timeout);
-        reject(error);
+      orderbookWs.onerror = (err) => {
+        clearTimeout(connTimeout);
+        reject(err);
       };
 
-      RTDS_WS = createRTDSClient(
-        () => {
-          rtdsWsConnected = true;
-          checkBothConnected();
-        },
-        (error) => {
-          clearTimeout(timeout);
-          reject(error);
-        }
+      priceWs = createRTDSClient(
+        () => { priceConnected = true; verifyConnections(); },
+        (err) => { clearTimeout(connTimeout); reject(err); }
       );
     });
 
-    USER_WS.send(JSON.stringify({
+    // Subscribe to market data
+    orderbookWs.send(JSON.stringify({
       type: "market",
-      assets_ids: [upTokenId, downTokenId]
+      assets_ids: [bullTokenId, bearTokenId]
     }));
 
-    RTDS_WS.subscribe({
+    priceWs.subscribe({
       subscriptions: [
         { topic: "crypto_prices", type: "update", filters: "{\"symbol\":\"BTCUSDT\"}" },
         { topic: "crypto_prices_chainlink", type: "update", filters: "{\"symbol\":\"btc/usd\"}" },
       ],
     });
 
-    console.log(tui.success(`Subscribed to market updates for tokens: ${upTokenId}, ${downTokenId}`));
+    console.log(tui.success(`Monitoring: ${bullTokenId.slice(0, 12)}... / ${bearTokenId.slice(0, 12)}...`));
 
+    // Cycle monitoring loop
     while (true) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(r => setTimeout(r, 1000));
+      orderbookWs.send("PING");
 
-      USER_WS.send("PING");
-
-      if (price_to_beat_global != 0 && endTimestamp - getCurrentTime() <= 0) {
-        if (price_to_beat_global > current_price) {
-          console.log(tui.outcomeBanner("DOWN WIN"));
-        } else {
-          console.log(tui.outcomeBanner("UP WIN"));
-        }
-
-        volatility.clearHistory()
+      const timeRemaining = endTimestamp - getCurrentTime();
+      if (price_to_beat_global !== 0 && timeRemaining <= 0) {
+        const outcome = price_to_beat_global > current_price ? "BEAR" : "BULL";
+        console.log(tui.outcomeBanner(`${outcome} OUTCOME`));
+        volTracker.clearHistory();
         break;
       }
     }
 
-    if (USER_WS.readyState === WebSocket.OPEN || USER_WS.readyState === WebSocket.CONNECTING) {
-      console.log(tui.dim("🔌 Closing websocket connection for market refresh"));
-      USER_WS.close();
+    // Cleanup connections
+    if (orderbookWs.readyState === WebSocket.OPEN || orderbookWs.readyState === WebSocket.CONNECTING) {
+      console.log(tui.dim("[CLEANUP] Closing connections"));
+      orderbookWs.close();
     }
 
-    // Add a small delay before starting the next market cycle
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Brief pause before next cycle
+    await new Promise(r => setTimeout(r, 2000));
   }
 }
 
-main();
+// Entry point
+bootstrap();

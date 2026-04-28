@@ -1,103 +1,104 @@
 import { ClobClient, OrderType, Side } from "@polymarket/clob-client-v2";
-import { trade } from "..";
+import { executor } from "..";
 import { purchased_token_global, set_purchased_token } from "../services/ws_rtds";
 import { tui } from "../tui";
 
+/**
+ * Trade execution handler for prediction market positions
+ */
 export class Trade {
     upTokenId: string;
     downTokenId: string;
+    private client: ClobClient;
 
-    authorizedClob: ClobClient
-
-    constructor(
-        upTokenId: string,
-        downTokenId: string,
-        authorizedClob: ClobClient
-    ) {
-        this.upTokenId = upTokenId;
-        this.downTokenId = downTokenId;
-
-        this.authorizedClob = authorizedClob;
+    constructor(bullToken: string, bearToken: string, clobClient: ClobClient) {
+        this.upTokenId = bullToken;
+        this.downTokenId = bearToken;
+        this.client = clobClient;
     }
 
+    /**
+     * Evaluates market conditions and executes if criteria met
+     */
     make_trading_decision = function (
-        delta: number,
-        remainingSec: number,
-        volatility1: number,
-        volatility2: number,
-        upTokenAskPrice: number,
-        upTokenBidPrice: number,
-        downTokenAskPrice: number,
-        downTokenBidPrice: number,
+        priceDelta: number,
+        timeLeft: number,
+        volBandLow: number,
+        volBandHigh: number,
+        bullAskPrice: number,
+        bullBidPrice: number,
+        bearAskPrice: number,
+        bearBidPrice: number,
     ): void {
-        if (volatility1 * volatility2 < 0 || purchased_token_global) return;
+        // Skip if volatility bands cross zero or position already taken
+        if (volBandLow * volBandHigh < 0 || purchased_token_global) return;
 
-        globalThis.__CONFIG__.trade_1.entry.forEach(element => {
-            if (
-                element.entry_remaining_sec_down <= remainingSec &&
-                element.entry_remaining_sec_up > remainingSec &&
-                Math.abs(delta) >= element.min &&
-                Math.abs(delta) < element.max
-            ) {
-                if (delta >= 0) {
-                    trade.buyUpToken(upTokenBidPrice, element.amount)
+        const entryRules = globalThis.__CONFIG__.trade_1.entry;
+        
+        for (const rule of entryRules) {
+            const timeInWindow = rule.entry_remaining_sec_down <= timeLeft && rule.entry_remaining_sec_up > timeLeft;
+            const deltaInRange = Math.abs(priceDelta) >= rule.min && Math.abs(priceDelta) < rule.max;
+            
+            if (timeInWindow && deltaInRange) {
+                if (priceDelta >= 0) {
+                    executor.executeBullEntry(bullBidPrice, rule.amount);
                 } else {
-                    trade.buyDownToken(downTokenBidPrice, element.amount)
+                    executor.executeBearEntry(bearBidPrice, rule.amount);
                 }
-            }
-        });
-    };
-
-    buyUpToken = async function (price: number, shareCount: number): Promise<void> {
-        if (!purchased_token_global) {
-            try {
-                console.time("buyUpToken");
-
-                set_purchased_token(true);
-
-
-                const order = await this.authorizedClob.createOrder({
-                    tokenID: this.upTokenId,
-                    price: price,
-                    side: Side.BUY,
-                    size: shareCount,
-                });
-
-                console.log(tui.success("Order created: " + JSON.stringify(order)));
-
-                const postResult = await this.authorizedClob.postOrder(order, OrderType.GTC);
-                console.log(tui.success("Order posted: " + JSON.stringify(postResult)));
-
-                console.timeEnd("buyUpToken");
-            } catch (error) {
-
+                break;
             }
         }
     };
 
-    buyDownToken = async function (price: number, shareCount: number): Promise<void> {
-        if (!purchased_token_global) {
-            try {
-                console.time("buyDownToken");
+    /**
+     * Execute long/bull position entry
+     */
+    executeBullEntry = async function (price: number, size: number): Promise<void> {
+        if (purchased_token_global) return;
+        
+        try {
+            const startTime = Date.now();
+            set_purchased_token(true);
 
-                set_purchased_token(true);
+            const orderPayload = await this.client.createOrder({
+                tokenID: this.upTokenId,
+                price: price,
+                side: Side.BUY,
+                size: size,
+            });
 
-                const order = await this.authorizedClob.createOrder({
-                    tokenID: this.downTokenId,
-                    price: price,
-                    side: Side.BUY,
-                    size: shareCount,
-                });
+            console.log(tui.success(`[BULL] Order: ${JSON.stringify(orderPayload)}`));
 
-                console.log(tui.success("Order created: " + JSON.stringify(order)));
+            const result = await this.client.postOrder(orderPayload, OrderType.GTC);
+            console.log(tui.success(`[BULL] Submitted: ${JSON.stringify(result)} (${Date.now() - startTime}ms)`));
+        } catch (err) {
+            console.error("[BULL] Execution failed:", err);
+        }
+    };
 
-                const postResult = await this.authorizedClob.postOrder(order, OrderType.GTC);
-                console.log(tui.success("Order posted: " + JSON.stringify(postResult)));
+    /**
+     * Execute short/bear position entry
+     */
+    executeBearEntry = async function (price: number, size: number): Promise<void> {
+        if (purchased_token_global) return;
+        
+        try {
+            const startTime = Date.now();
+            set_purchased_token(true);
 
-                console.timeEnd("buyDownToken");
-            } catch (error) {
+            const orderPayload = await this.client.createOrder({
+                tokenID: this.downTokenId,
+                price: price,
+                side: Side.BUY,
+                size: size,
+            });
 
-            }
+            console.log(tui.success(`[BEAR] Order: ${JSON.stringify(orderPayload)}`));
+
+            const result = await this.client.postOrder(orderPayload, OrderType.GTC);
+            console.log(tui.success(`[BEAR] Submitted: ${JSON.stringify(result)} (${Date.now() - startTime}ms)`));
+        } catch (err) {
+            console.error("[BEAR] Execution failed:", err);
         }
     };
 }

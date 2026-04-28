@@ -2,55 +2,49 @@ import { ApiKeyCreds, ClobClient, Side } from "@polymarket/clob-client-v2";
 import { Wallet } from "ethers";
 import { POLYMARKET_PRIVATE_KEY, PROXY_WALLET_ADDRESS } from "../config";
 
-// V2 CLOB Host - same URL after April 28, 2026 cutover
-export const HOST = "https://clob.polymarket.com";
-export const CHAIN_ID = 137;
-export const SIGNER = new Wallet(POLYMARKET_PRIVATE_KEY);
+// Network configuration
+const CLOB_ENDPOINT = "https://clob.polymarket.com";
+const POLYGON_CHAIN = 137;
 
-// For proxy wallets (Gnosis Safe), FUNDER must be the proxy contract address
-// SIGNER is the EOA that signs, FUNDER is the proxy wallet that holds funds
+// Wallet setup
+export const HOST = CLOB_ENDPOINT;
+export const CHAIN_ID = POLYGON_CHAIN;
+export const SIGNER = new Wallet(POLYMARKET_PRIVATE_KEY);
 export const FUNDER = PROXY_WALLET_ADDRESS;
 
-export const SIGNATURE_TYPE = 2; // 2 = Gnosis Safe / Proxy wallet (0 = EOA, 1 = EIP-1271, 2 = Gnosis Safe)
+// Signature mode: 0=EOA, 1=EIP-1271, 2=Safe
+export const SIGNATURE_TYPE = 2;
 
-// V2 Client Factory - uses options object instead of positional args
-export function createClobClient(creds?: ApiKeyCreds): ClobClient {
+/**
+ * Creates authenticated CLOB client instance
+ */
+export function createClobClient(credentials?: ApiKeyCreds): ClobClient {
   return new ClobClient({
-    host: HOST,
-    chain: CHAIN_ID, // V2: renamed from chainId to chain
+    host: CLOB_ENDPOINT,
+    chain: POLYGON_CHAIN,
     signer: SIGNER,
-    creds,
+    creds: credentials,
     signatureType: SIGNATURE_TYPE,
     funderAddress: FUNDER,
   });
 }
 
+/**
+ * Fetches current bid/ask prices for token pair
+ */
+export async function getPrices(bullToken: string, bearToken: string) {
+    const priceRequest = [
+        { token_id: bullToken, side: "BUY" },
+        { token_id: bullToken, side: "SELL" },
+        { token_id: bearToken, side: "BUY" },
+        { token_id: bearToken, side: "SELL" },
+    ];
 
-export const getPrices = async (upTokenId: string, downTokenId: string) => {
-    const response = await fetch("https://clob.polymarket.com/prices", {
+    const resp = await fetch(`${CLOB_ENDPOINT}/prices`, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify([
-            {
-                token_id: upTokenId,
-                side: "BUY",
-            },
-            {
-                token_id: upTokenId,
-                side: "SELL",
-            },
-            {
-                token_id: downTokenId,
-                side: "BUY",
-            },
-            {
-                token_id: downTokenId,
-                side: "SELL",
-            },
-        ]),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(priceRequest),
     });
-    const prices = await response.json();
-    return prices;
+    
+    return resp.json();
 }

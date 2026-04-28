@@ -1,65 +1,45 @@
-# Polymarket 5Min Arbitrage Trading Bot
+# Crypto Prediction Executor
 
-A **professional-grade 5-minute arbitrage bot** : Designed for high-frequency trading strategies on short-duration prediction markets, leveraging precise timing and configurable entry rules.
+Event-driven execution tooling for short-horizon crypto prediction markets. The project watches live price feeds and CLOB order books, then evaluates configured entry windows before submitting positions through a Safe-backed Polymarket account.
 
-> **CLOB V2 Ready** - Updated for Polymarket's April 28, 2026 infrastructure upgrade (CLOB V2, pUSD collateral)
+This version targets Polymarket CLOB V2 and uses the `@polymarket/clob-client-v2` SDK.
 
----
+## What It Does
 
-## Features
-
-* Real-time monitoring of market orderbooks with 1-second granularity
-* Configurable entry rules:
-
-  * Price thresholds (min/max)
-  * Remaining seconds until round end
-  * Trade amount per entry
-* Supports proxy wallets and secure private key management via `.env`
-* Modular design for multiple assets (BTC, ETH, SOL, XRP)
-* Easily extensible for advanced trading strategies
-
----
+- Tracks active BTC, ETH, SOL, and XRP up/down markets.
+- Derives the current market slug from the configured asset and period.
+- Streams order book data from Polymarket's market WebSocket.
+- Streams reference crypto prices from Polymarket RTDS.
+- Applies TOML-defined delta, volatility, and timing rules.
+- Places bull or bear entries through a proxy wallet using CLOB V2 signing.
 
 ## Requirements
 
-* Node.js >= 20
-* NPM >= 9
-* Polygon wallet with **pUSD** funding (CLOB V2 uses pUSD instead of USDC.e)
-* Polymarket account with access to the CLOB API
+- Node.js 20 or newer
+- npm 9 or newer
+- Polygon RPC endpoint
+- Polymarket account with CLOB API access
+- Proxy wallet funded with pUSD for CLOB V2 trading
 
-### CLOB V2 Changes (April 2026)
+API-only users should make sure their collateral is available as pUSD. Legacy USDC.e balances are not the active CLOB V2 collateral.
 
-This bot has been updated for Polymarket's CLOB V2 infrastructure:
+## Configuration
 
-| Component | V1 (Legacy) | V2 (Current) |
-|-----------|-------------|--------------|
-| SDK | `@polymarket/clob-client` | `@polymarket/clob-client-v2` |
-| Collateral | USDC.e | pUSD (Polymarket USD) |
-| Constructor | Positional args | Options object |
-| Fees | Embedded in order | Protocol-set at match time |
-| EIP-712 Version | "1" | "2" |
-
-If you have USDC.e, wrap it to pUSD via the Collateral Onramp contract's `wrap()` function.
-
----
-
-## Setup
-
-1. Copy `.env.example` to `.env`:
+Create your local environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Configure `.env` with your credentials:
+Set the wallet and RPC values:
 
 ```env
 POLYMARKET_PRIVATE_KEY=YOUR_PRIVATE_KEY
-PROXY_WALLET_ADDRESS=0x6031b6eed1c97e853c6e0f03ad3ce3529351f96d
-RPC_URL=https://polygon-mainnet.g.alchemy.com/v2/xxxxxx
+PROXY_WALLET_ADDRESS=0x0000000000000000000000000000000000000000
+RPC_URL=https://polygon-mainnet.g.alchemy.com/v2/your-key
 ```
 
-3. Update `config.toml` with your trading strategy:
+Tune market selection and entry rules in `trade.toml`:
 
 ```toml
 [market]
@@ -70,53 +50,68 @@ market_period = "5"
 entry = [
   { min = 10, max = 500, entry_remaining_sec_down = 1, entry_remaining_sec_up = 2, amount = 5 },
   { min = 20, max = 500, entry_remaining_sec_down = 2, entry_remaining_sec_up = 3, amount = 5 },
-  { min = 40, max = 500, entry_remaining_sec_down = 3, entry_remaining_sec_up = 5, amount = 5 },
 ]
 
 [monitor]
-proxy_wallet_address = "0x6031b6eed1c97e853c6e0f03ad3ce3529351f96d"
-market_slug = "btc-updown-15m-1769634900"
+proxy_wallet_address = "0x0000000000000000000000000000000000000000"
+market_slug = "btc-updown-5m-1769634900"
 ```
 
----
+## Running
 
-## Usage
+Install dependencies:
 
 ```bash
-node index.js
+npm install
 ```
 
-Bot Workflow:
+Run in development mode:
 
-1. Fetch market orderbook data every second
-2. Calculate remaining seconds until the round ends
-3. Evaluate entry rules for price and timing
-4. Place YES/NO orders automatically when conditions are satisfied
+```bash
+npm run start:dev
+```
 
----
+Write runtime output to `output.log`:
 
-## Notes
+```bash
+npm run start:log
+```
 
-* ⚠️ Polymarket requires **EIP‑712 signed orders** (V2 uses domain version "2")
-* ⚠️ Ensure your proxy wallet has sufficient **pUSD** balance (not USDC.e)
-* ⚠️ Polling is used; consider WebSocket integration for ultra-low latency
-* ⚠️ High-risk strategy: test extensively before real capital deployment
-* ⚠️ Optional: Set `POLY_BUILDER_CODE` for attribution and revenue sharing
+Build TypeScript:
 
----
+```bash
+npm run compile
+```
 
-## Recommended Enhancements
+Inspect wallet activity for the configured monitor market:
 
-* Real-time WebSocket market subscriptions for lower latency
-* Automatic cancellation of stale or unfilled orders
-* Multi-market trading support
-* Advanced strategies including dynamic thresholds, hedging, and trailing exits
+```bash
+npm run inspect
+```
 
----
+## Execution Flow
+
+1. Load `.env` and `trade.toml`.
+2. Create or derive Polymarket CLOB API credentials.
+3. Generate the active market slug for the configured cycle.
+4. Resolve CLOB token IDs from Gamma market data.
+5. Subscribe to order book and reference price streams.
+6. Evaluate price delta, volatility bands, and remaining seconds.
+7. Submit one bull or bear order when a configured entry rule matches.
+8. Reset state and move to the next market cycle.
+
+## CLOB V2 Notes
+
+- The project uses `@polymarket/clob-client-v2`.
+- Client construction uses the V2 options object with `chain`, `signer`, `creds`, `signatureType`, and `funderAddress`.
+- Fees are handled by the protocol at match time.
+- Orders are signed against the V2 exchange domain.
+- Optional builder attribution can be added later with `POLY_BUILDER_CODE`.
+
+## Risk Notice
+
+This software can submit real orders. Test with small size, confirm wallet permissions, and verify pUSD balance before live trading. Prediction markets are volatile and the configured strategy can lose funds.
 
 ## License
 
-MIT License
-
-## Contact
-For the best version contact here: [Telegram](https://t.me/snipmaxi)
+MIT
